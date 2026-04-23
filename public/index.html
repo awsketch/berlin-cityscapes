@@ -3,15 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#1976D2" />
+    <meta name="theme-color" content="#bc001f" />
     <meta
       name="description"
-      content="Berlin Treasure Hunt - Explore Berlin and find treasures with audio clues"
+      content="Berlin Kartograph — find the hidden geometry of the city."
     />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/favicon.ico" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <title>Berlin Treasure Hunt</title>
+    <title>Berlin Kartograph</title>
+
+    <!-- Bauhaus type system: Space Grotesk for headlines, Manrope for body -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
     <style>
       * {
         margin: 0;
@@ -19,9 +28,10 @@
         box-sizing: border-box;
       }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-          sans-serif;
+        font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          'Roboto', sans-serif;
+        background-color: #f9f9f9;
+        color: #1a1c1c;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
       }
@@ -32,6 +42,63 @@
       html, body, #root {
         width: 100%;
         height: 100%;
+      }
+
+      /* --- Bauhaus overrides for Leaflet popups --- */
+      /* Let popups escape the map container so the close-button (×) is never
+         clipped by the header when the map is zoomed out (the default
+         .leaflet-container has overflow:hidden, which was cutting off the
+         popup's top edge). Tiles stay tidy because Leaflet only renders
+         tiles that fit the current viewport. */
+      .leaflet-container {
+        overflow: visible !important;
+      }
+      /* Keep the popup pane above our header (header z-index: 1000). */
+      .leaflet-popup-pane,
+      .leaflet-popup {
+        z-index: 1100 !important;
+      }
+      /* Sharp 0px corners, no fluffy shadows, white card with red accent. */
+      .leaflet-popup-content-wrapper {
+        border-radius: 0 !important;
+        background: #ffffff;
+        border-left: 12px solid #bc001f;
+        box-shadow: 0 6px 0 rgba(26, 28, 28, 0.06);
+        padding: 0;
+      }
+      .leaflet-popup-content {
+        margin: 0 !important;
+        font-family: 'Manrope', sans-serif;
+        /* Cap the popup height to the viewport minus the header (~90px)
+           and some breathing room, and let it scroll internally. This
+           guarantees the close button is always reachable even when the
+           map bounds don't leave enough room to auto-pan fully. */
+        max-height: calc(100vh - 140px);
+        overflow-y: auto;
+      }
+      .leaflet-popup-tip {
+        background: #bc001f;
+        box-shadow: none;
+      }
+      .leaflet-popup-close-button {
+        color: #1a1c1c !important;
+        font-size: 22px !important;
+        padding: 6px 8px !important;
+      }
+      /* Map controls: sharp edges */
+      .leaflet-bar,
+      .leaflet-bar a {
+        border-radius: 0 !important;
+        border-color: #e2e2e2 !important;
+      }
+      .leaflet-bar a {
+        font-family: 'Space Grotesk', sans-serif !important;
+        font-weight: 700;
+      }
+      /* Marker container should not clip our geometric shapes */
+      .bauhaus-marker {
+        background: transparent !important;
+        border: none !important;
       }
     </style>
   </head>

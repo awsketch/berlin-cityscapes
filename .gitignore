@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# macOS
+.DS_Store
+
+# Design exports (Stitch)
+stitch_*/
+
+# Lock file (kept out to match existing repo convention)
+package-lock.json
+
+# Build
+build/
+dist/
+
+# Env
+.env
+.env.local
