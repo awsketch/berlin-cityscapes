@@ -273,6 +273,8 @@ const TreasureMarker = ({ treasure, isFound, isUnlocked, onToggleFound }) => {
         autoPanPaddingBottomRight={[20, 40]}
       >
         <div style={{ padding: '20px 20px 18px 20px' }}>
+          {/* Top two lines reserve ~28px on the right so the × close button
+              (pinned on the 20px frame) never overlaps the eyebrow / title. */}
           <span style={{
             display: 'block',
             fontFamily: "'Space Grotesk', sans-serif",
@@ -282,6 +284,7 @@ const TreasureMarker = ({ treasure, isFound, isUnlocked, onToggleFound }) => {
             letterSpacing: '0.22em',
             color: style.color,
             marginBottom: '6px',
+            paddingRight: '28px',
           }}>
             {`Station ${String(treasure.id).padStart(2, '0')} // ${style.label}`}
           </span>
@@ -294,6 +297,7 @@ const TreasureMarker = ({ treasure, isFound, isUnlocked, onToggleFound }) => {
             textTransform: 'uppercase',
             letterSpacing: '-0.01em',
             color: COLORS.onSurface,
+            paddingRight: '28px',
           }}>
             {treasure.name}
           </h3>
@@ -457,6 +461,8 @@ const StationsPanel = ({ open, onClose, treasures, foundIds, unlockedIds = [] })
             onClick={onClose}
             aria-label="Close stations panel"
             style={{
+              // Zero padding + a fixed 24px box keeps the glyph's visual right
+              // edge flush with the panel header's 22px content frame.
               background: 'transparent',
               border: 'none',
               fontFamily: "'Space Grotesk', sans-serif",
@@ -465,7 +471,13 @@ const StationsPanel = ({ open, onClose, treasures, foundIds, unlockedIds = [] })
               lineHeight: 1,
               color: COLORS.onSurface,
               cursor: 'pointer',
-              padding: '4px 8px',
+              padding: 0,
+              width: '24px',
+              height: '24px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: '2px',
             }}
           >
             ×
@@ -900,6 +912,30 @@ export default function TreasureHuntApp() {
                   mask-size: 4px 4px;
           -webkit-mask-repeat: repeat;
                   mask-repeat: repeat;
+        }
+        /* Align the Leaflet popup close button to the same 20px frame the
+           popup content uses, and restyle it to match the Bauhaus glyph set
+           (Space Grotesk, sharp, no default underline / pink color). */
+        .leaflet-popup-content-wrapper .leaflet-popup-close-button,
+        .leaflet-popup .leaflet-popup-close-button {
+          top: 16px !important;
+          right: 20px !important;
+          width: 20px;
+          height: 20px;
+          padding: 0 !important;
+          font: 700 22px/1 'Space Grotesk', sans-serif !important;
+          color: ${COLORS.onSurface} !important;
+          text-decoration: none !important;
+          background: transparent !important;
+        }
+        .leaflet-popup-content-wrapper .leaflet-popup-close-button:hover {
+          color: ${COLORS.primary} !important;
+          background: transparent !important;
+        }
+        /* Make room for the × so it never overlaps the category eyebrow
+           text, which also starts on the 20px frame. */
+        .leaflet-popup-content {
+          margin-right: 0 !important;
         }
       `}</style>
 
