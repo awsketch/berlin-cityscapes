@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -36,62 +36,88 @@ L.Icon.Default.mergeOptions({
 const STORAGE_KEY = 'treasureHuntProgress';
 const UNLOCK_STORAGE_KEY = 'treasureHuntUnlocks';
 
-// Treasure stations — Scheunenviertel, Berlin Mitte
-// Each has a unique `unlockToken` that must arrive via the QR-code URL
+// Station config — Scheunenviertel, Berlin Mitte.
+// Structural data only: editable title / description / clue text lives in
+// `public/stations/<folder>/*.txt` and is loaded at runtime.
+//
+// `folder` is the subfolder under `public/stations/`. It's intentionally
+// generic (`station-1`, `station-2`, …) so the slot stays stable even if you
+// swap the place it points to.
+//
+// `unlockToken` is the secret that must arrive via the QR-code URL
 // (?unlock=<token>) before the audio is revealed. Tokens are random,
 // hard-to-guess strings; do not change them once your QR codes are printed.
-const TREASURES = [
+const STATIONS = [
   {
     id: 1,
-    name: 'Neue Synagoge',
+    folder: 'station-1',
     category: 'historic',
-    coords: [52.5249, 13.3938],
-    clue: 'A Moorish-revival dome that was nearly lost twice. Find the eight-pointed star pattern set into the brickwork above the main entrance.',
+    coords: [52.52666850476375, 13.394591768148524],
     audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-    description: 'Built 1859–1866 on Oranienburger Straße. Its gilded dome was a beacon of Berlin\'s Jewish community and survived Kristallnacht thanks to a single police officer.',
     unlockToken: 'ns-jt9k4m2zwq',
   },
   {
     id: 2,
-    name: 'Hackesche Höfe',
+    folder: 'station-2',
     category: 'historic',
     coords: [52.5249, 13.4017],
-    clue: 'Eight courtyards, one network. Step into the first court and look up — the Jugendstil facade hides a strict geometric rhythm.',
     audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-    description: 'Berlin\'s largest enclosed courtyard complex. Restored Art Nouveau tilework by August Endell — a study in pattern and proportion.',
     unlockToken: 'hh-r8p3v7nxbf',
   },
   {
     id: 3,
-    name: 'Monbijoupark',
+    folder: 'station-3',
     category: 'secret',
     coords: [52.5239, 13.3974],
-    clue: 'Where a baroque palace once stood, only its outline remains. Find the stone fragment marking the river-facing corner.',
     audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-    description: 'A small park on the Spree that holds the negative space of the demolished Monbijou Palace — a quiet pocket between the bustle of Hackescher Markt and the Museum Island bridge.',
     unlockToken: 'mb-cwm2x5h7tq',
   },
   {
     id: 4,
-    name: 'KW Institute for Contemporary Art',
+    folder: 'station-4',
     category: 'modern',
     coords: [52.5276, 13.3974],
-    clue: 'A margarine factory turned art temple. The geometry hides in the staircase — count the angles before you climb.',
     audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
-    description: 'Auguststraße 69. The reactor of Berlin\'s post-Wende contemporary art scene — and the original home of the Berlin Biennale.',
     unlockToken: 'kw-y4n6kbsd9p',
   },
   {
     id: 5,
-    name: 'Volksbühne',
+    folder: 'station-5',
     category: 'modern',
     coords: [52.5267, 13.4116],
-    clue: 'A people\'s stage cast in stone. Find the giant rolling boulder out front and read what it once stood against.',
     audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
-    description: 'Built 1913–1914 by Oskar Kaufmann on Rosa-Luxemburg-Platz. A monumental, near-windowless theatre block — the architectural anchor of the eastern Scheunenviertel.',
     unlockToken: 'vb-z3q8rhwm5c',
+  },
+  {
+    // Placeholder 6th station — replace coords / category / unlockToken once
+    // the real place is chosen. Text lives in public/stations/station-6/*.txt.
+    id: 6,
+    folder: 'station-6',
+    category: 'secret',
+    coords: [52.5260, 13.4000],
+    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3',
+    unlockToken: 's6-a7k2m9wpqx4b',
   }
 ];
+
+// Fallback title used before the .txt files finish loading, so the stations
+// panel never renders blank rows.
+const fallbackTitle = (station) =>
+  `Station ${String(station.id).padStart(2, '0')}`;
+
+// Fetch a .txt file from public/stations/<folder>/; return '' if missing
+// or unreadable rather than crashing the UI.
+const fetchStationText = async (folder, filename) => {
+  try {
+    const base = process.env.PUBLIC_URL || '';
+    const res = await fetch(`${base}/stations/${folder}/${filename}`);
+    if (!res.ok) return '';
+    const raw = await res.text();
+    return raw.trim();
+  } catch {
+    return '';
+  }
+};
 
 // Read saved progress once on startup.
 const loadInitialProgress = () => {
@@ -164,7 +190,7 @@ const LockedAudio = () => (
         color: COLORS.onSurfaceVariant,
         lineHeight: 1.4,
       }}>
-        Scan the QR code at this station to unlock the audio clue.
+        Scan the QR code at this station to unlock the audio story.
       </div>
     </div>
   </div>
@@ -187,10 +213,11 @@ const AudioPlayer = ({ audioUrl, treasureName }) => {
         fontFamily: "'Space Grotesk', sans-serif",
         color: COLORS.onSurface,
       }}>
-        Audio Clue · {treasureName}
+        Talk to me! · {treasureName}
       </p>
       <audio
         controls
+        preload="none"
         style={{ width: '100%', marginTop: '4px' }}
         controlsList="nodownload"
       >
@@ -587,6 +614,52 @@ export default function TreasureHuntApp() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [justUnlockedId, setJustUnlockedId] = useState(null); // for the toast
 
+  // Content loaded from public/stations/<folder>/*.txt — keyed by station id.
+  // { [id]: { title, description, clue } }
+  const [stationContent, setStationContent] = useState({});
+
+  // Load each station's .txt files once on mount. Kept in parallel so the six
+  // stations' eighteen tiny fetches don't stack up.
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const entries = await Promise.all(
+        STATIONS.map(async (s) => {
+          const [title, description, clue] = await Promise.all([
+            fetchStationText(s.folder, 'title.txt'),
+            fetchStationText(s.folder, 'description.txt'),
+            fetchStationText(s.folder, 'clue.txt'),
+          ]);
+          return [s.id, { title, description, clue }];
+        })
+      );
+      if (!cancelled) {
+        setStationContent(Object.fromEntries(entries));
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Enriched station objects with `name`, `description`, `clue` merged in
+  // from the loaded .txt content. Falls back to "Station 0N" for the title
+  // so the UI never flashes blank rows.
+  const treasures = useMemo(
+    () =>
+      STATIONS.map((s) => {
+        const c = stationContent[s.id] || {};
+        return {
+          ...s,
+          name: c.title || fallbackTitle(s),
+          description: c.description || '',
+          clue: c.clue || '',
+        };
+      }),
+    [stationContent]
+  );
+
   // Skip the first save so we never overwrite storage with the hydrated
   // value on mount.
   const didHydrate = useRef(false);
@@ -621,7 +694,7 @@ export default function TreasureHuntApp() {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('unlock');
     if (!token) return;
-    const matched = TREASURES.find((t) => t.unlockToken === token);
+    const matched = STATIONS.find((t) => t.unlockToken === token);
     if (matched) {
       setUnlockedStations((prev) =>
         prev.includes(matched.id) ? prev : [...prev, matched.id]
@@ -652,7 +725,7 @@ export default function TreasureHuntApp() {
     );
   };
 
-  const allFound = foundTreasures.length === TREASURES.length;
+  const allFound = foundTreasures.length === STATIONS.length;
 
   return (
     <div style={{
@@ -703,7 +776,7 @@ export default function TreasureHuntApp() {
         <button
           type="button"
           onClick={() => setPanelOpen(true)}
-          aria-label={`Open stations list — ${foundTreasures.length} of ${TREASURES.length} found`}
+          aria-label={`Open stations list — ${foundTreasures.length} of ${STATIONS.length} found`}
           aria-expanded={panelOpen}
           style={{
             display: 'flex',
@@ -735,7 +808,7 @@ export default function TreasureHuntApp() {
             color: COLORS.primary,
             letterSpacing: '-0.02em',
           }}>
-            {foundTreasures.length}/{TREASURES.length}
+            {foundTreasures.length}/{STATIONS.length}
           </span>
           {/* Tiny right-pointing chevron to hint at the slide-in */}
           <span aria-hidden="true" style={{
@@ -754,14 +827,14 @@ export default function TreasureHuntApp() {
       <StationsPanel
         open={panelOpen}
         onClose={() => setPanelOpen(false)}
-        treasures={TREASURES}
+        treasures={treasures}
         foundIds={foundTreasures}
         unlockedIds={unlockedStations}
       />
 
       {/* --- "Just unlocked" Toast --- */}
       {justUnlockedId != null && (() => {
-        const t = TREASURES.find((x) => x.id === justUnlockedId);
+        const t = treasures.find((x) => x.id === justUnlockedId);
         if (!t) return null;
         const style = CATEGORY_STYLE[t.category] || CATEGORY_STYLE.historic;
         return (
@@ -853,7 +926,7 @@ export default function TreasureHuntApp() {
           url="https://tiles.stadiamaps.com/tiles/stamen_toner_lines/{z}/{x}/{y}{r}.png"
           maxZoom={20}
         />
-        {TREASURES.map((treasure) => (
+        {treasures.map((treasure) => (
           <TreasureMarker
             key={treasure.id}
             treasure={treasure}
