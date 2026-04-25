@@ -22,7 +22,7 @@ const COLORS = {
 const CATEGORY_STYLE = {
   historic: { color: COLORS.primary, label: 'Historic Site', shape: 'circle' },
   modern:   { color: COLORS.secondary, label: 'Modern Architecture', shape: 'square' },
-  secret:   { color: COLORS.tertiary, label: 'Secret Spot', shape: 'diamond' },
+  secret:   { color: COLORS.tertiary, label: 'Secret Spot', shape: 'triangle' },
 };
 
 // Fix default marker icon issue with Leaflet
@@ -244,10 +244,16 @@ const buildMarkerHtml = (treasure, isFound) => {
   if (style.shape === 'circle') {
     return `<div style="${base}border-radius:50%;">${label}</div>`;
   }
-  if (style.shape === 'diamond') {
-    // Rotated square (Bauhaus yellow "guidance" primitive)
-    return `<div style="${base}transform:rotate(45deg);">
-              <span style="display:inline-block;transform:rotate(-45deg);">${label}</span>
+  if (style.shape === 'triangle') {
+    // SVG so the white passe-partout border can follow the sloped edges
+    // (a clip-path triangle would clip its own border off). The label sits
+    // in the visual centroid (~⅔ down) rather than the geometric center,
+    // so it doesn't crowd the apex.
+    return `<div style="position:relative;width:32px;height:32px;filter:drop-shadow(0 2px 0 rgba(26,28,28,0.15));">
+              <svg width="32" height="32" viewBox="0 0 32 32" style="display:block;overflow:visible;">
+                <polygon points="16,3 29,29 3,29" fill="${bg}" stroke="#ffffff" stroke-width="4" stroke-linejoin="miter" />
+              </svg>
+              <span style="position:absolute;left:0;right:0;bottom:4px;text-align:center;line-height:1;">${label}</span>
             </div>`;
   }
   // 'square' — sharp 0px corners
@@ -527,19 +533,36 @@ const StationsPanel = ({ open, onClose, treasures, foundIds, unlockedIds = [] })
                 }}
               >
                 {/* Geometric category badge */}
-                <span
-                  aria-hidden="true"
-                  style={{
-                    flexShrink: 0,
-                    width: '32px',
-                    height: '32px',
-                    background: badgeBg,
-                    border: `3px solid ${COLORS.surfaceLowest}`,
-                    boxShadow: `0 0 0 1px ${badgeBg}`,
-                    borderRadius: style.shape === 'circle' ? '50%' : 0,
-                    transform: style.shape === 'diamond' ? 'rotate(45deg)' : 'none',
-                  }}
-                />
+                {style.shape === 'triangle' ? (
+                  <svg
+                    aria-hidden="true"
+                    width="32"
+                    height="32"
+                    viewBox="0 0 32 32"
+                    style={{ flexShrink: 0, display: 'block', overflow: 'visible' }}
+                  >
+                    <polygon
+                      points="16,3 29,29 3,29"
+                      fill={badgeBg}
+                      stroke={COLORS.surfaceLowest}
+                      strokeWidth="3"
+                      strokeLinejoin="miter"
+                    />
+                  </svg>
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      flexShrink: 0,
+                      width: '32px',
+                      height: '32px',
+                      background: badgeBg,
+                      border: `3px solid ${COLORS.surfaceLowest}`,
+                      boxShadow: `0 0 0 1px ${badgeBg}`,
+                      borderRadius: style.shape === 'circle' ? '50%' : 0,
+                    }}
+                  />
+                )}
                 {/* Text block */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
@@ -619,12 +642,108 @@ const PAN_BOUNDS = [
   [52.540, 13.418],
 ];
 
+// --- Boot splash ---
+// Three category shapes (yellow triangle, blue square, red circle) burst out
+// from a dot in unison, hold briefly, then shrink toward the top-left header
+// position and fade out. Total runtime: 2.5s.
+//
+// Pure CSS keyframes — no GIF, vector-sharp on every pixel ratio.
+//
+// Implementation notes:
+// - Three explicit @keyframes (one per shape) instead of shared keyframe with
+//   CSS variables — variables in keyframes can silently fail in some build
+//   pipelines, and we want this to be impossible to misfire.
+// - Timer captured in a ref so React re-renders or StrictMode double-mounts
+//   never reset the 2.5s countdown.
+const BootSplash = ({ onDone }) => {
+  const onDoneRef = React.useRef(onDone);
+  React.useEffect(() => { onDoneRef.current = onDone; });
+  React.useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('[BootSplash] mounted');
+    const t = setTimeout(() => onDoneRef.current && onDoneRef.current(), 2500);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div
+      role="presentation"
+      aria-hidden="true"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: COLORS.surface,
+        zIndex: 10000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        animation: 'bootSplashFade 0.4s ease-in 2.1s both',
+        pointerEvents: 'none',
+      }}
+    >
+      <style>{`
+        @keyframes bootSplashFade {
+          to { opacity: 0; }
+        }
+        @keyframes bootShapeYellow {
+          0%   { transform: translate(0,0) scale(0);    opacity: 0; }
+          10%  { transform: translate(0,0) scale(0.08); opacity: 1; }
+          56%  { transform: translate(0,0) scale(1);    opacity: 1; }
+          76%  { transform: translate(0,0) scale(1);    opacity: 1; }
+          100% { transform: translate(calc(-50vw + 128px), calc(-50vh + 28px)) scale(0.14); opacity: 0; }
+        }
+        @keyframes bootShapeBlue {
+          0%   { transform: translate(0,0) scale(0);    opacity: 0; }
+          10%  { transform: translate(0,0) scale(0.08); opacity: 1; }
+          56%  { transform: translate(0,0) scale(1);    opacity: 1; }
+          76%  { transform: translate(0,0) scale(1);    opacity: 1; }
+          100% { transform: translate(calc(-50vw + 28px), calc(-50vh + 28px)) scale(0.14); opacity: 0; }
+        }
+        @keyframes bootShapeRed {
+          0%   { transform: translate(0,0) scale(0);    opacity: 0; }
+          10%  { transform: translate(0,0) scale(0.08); opacity: 1; }
+          56%  { transform: translate(0,0) scale(1);    opacity: 1; }
+          76%  { transform: translate(0,0) scale(1);    opacity: 1; }
+          100% { transform: translate(calc(-50vw - 72px), calc(-50vh + 28px)) scale(0.14); opacity: 0; }
+        }
+        .boot-shape {
+          width: 72px;
+          height: 72px;
+          transform-origin: 50% 50%;
+          will-change: transform, opacity;
+        }
+        .boot-shape--yellow { animation: bootShapeYellow 2.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .boot-shape--blue   { animation: bootShapeBlue   2.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .boot-shape--red    { animation: bootShapeRed    2.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+      `}</style>
+      <div style={{ display: 'flex', gap: '28px', alignItems: 'center' }}>
+        <div
+          className="boot-shape boot-shape--yellow"
+          style={{
+            backgroundColor: COLORS.tertiary,
+            clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)',
+          }}
+        />
+        <div
+          className="boot-shape boot-shape--blue"
+          style={{ backgroundColor: COLORS.secondary }}
+        />
+        <div
+          className="boot-shape boot-shape--red"
+          style={{ backgroundColor: COLORS.primary, borderRadius: '50%' }}
+        />
+      </div>
+    </div>
+  );
+};
+
 // --- Main App Component ---
 export default function TreasureHuntApp() {
   const [foundTreasures, setFoundTreasures] = useState(loadInitialProgress);
   const [unlockedStations, setUnlockedStations] = useState(loadInitialUnlocks);
   const [panelOpen, setPanelOpen] = useState(false);
   const [justUnlockedId, setJustUnlockedId] = useState(null); // for the toast
+  const [bootDone, setBootDone] = useState(false); // splash overlay until 2.5s
 
   // Content loaded from public/stations/<folder>/*.txt — keyed by station id.
   // { [id]: { title, description, clue } }
@@ -747,6 +866,9 @@ export default function TreasureHuntApp() {
       flexDirection: 'column',
       backgroundColor: COLORS.surface,
     }}>
+      {/* --- Boot splash (first paint only) --- */}
+      {!bootDone && <BootSplash onDone={() => setBootDone(true)} />}
+
       {/* --- Bauhaus Header --- */}
       <header style={{
         backgroundColor: COLORS.surface,
